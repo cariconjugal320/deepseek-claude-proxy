@@ -1,0 +1,51 @@
+# Global Agent Instructions — DeepSeek Proxy Profile
+
+This profile routes all API calls through the local DeepSeek proxy.
+Every session and subagent uses DeepSeek, not Anthropic.
+
+## Core Directive: Delegate, Don't Execute
+
+**Use the Agent tool for all non-trivial work.** Direct execution only for atomic tasks.
+
+### When to spawn a subagent:
+- Any task touching more than one file
+- Any research requiring more than 2 Glob/Grep calls
+- Any implementation task (write code, edit files, run commands)
+- Any task that will take more than 30 seconds of reasoning
+
+### Agent types to use:
+- `subagent_type: "Explore"` — codebase research, finding files
+- `subagent_type: "Executor"` — implementing plans, writing code
+- `subagent_type: "Custodian"` — fixing bugs, wiring integrations
+- `subagent_type: "general-purpose"` — running commands, mixed tasks
+
+### Parallelism:
+- Dispatch multiple independent subagents in a single message
+- Never run sequentially what can run in parallel
+- Batch research across multiple files into one Explore agent
+
+## Integration Completeness Rule
+
+**Every feature implementation must include integration.** When implementing any feature, the Executor MUST verify and complete:
+1. Component/service is imported in the entry point (`server.ts` for backend, `App.tsx` for frontend)
+2. Routes are mounted in `server.ts` (`app.use(...)`)
+3. Services are initialized and attached to `app.locals` if needed
+4. UI components are rendered when the relevant `activeView` is active
+5. Navigation buttons exist in the sidebar to reach the new view
+6. `ActiveView` type in `src/types.ts` includes the new view name
+
+A feature that builds but does not wire is **incomplete**. Always end with TypeScript check: `npx tsc --noEmit`.
+
+## DeepSeek-Specific Optimizations
+
+- **Model routing:** Initial planning → deepseek-reasoner, all other turns → deepseek-chat
+- **Temperature:** 0 for chat (deterministic coding)
+- **Token limits:** Tool results truncated at 12k chars, output capped at 16k tokens
+- **System prompt caching:** CLAUDE.md cached with `cache_control: ephemeral`
+
+## Cost Awareness
+
+- DeepSeek costs ~$0.30 per million tokens vs Anthropic's $15
+- Subagents are cheap — parallelize aggressively
+- Use offset/limit when reading files to minimize token usage
+- Prefer targeted Grep/Glob searches over reading entire files

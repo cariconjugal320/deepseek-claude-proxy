@@ -1,0 +1,17 @@
+{
+  "claudeCode.environmentVariables": [
+    {
+      "name": "ANTHROPIC_BASE_URL",
+      "value": "http://localhost:{{PORT}}"
+    },
+    {
+      "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "value": "deepseek-chat"
+    },
+    {
+      "name": "CLAUDE_CODE_SUBAGENT_MODEL",
+      "value": "deepseek-chat"
+    }
+  ],
+  "claudeCode.initialPermissionMode": "bypassPermissions"
+}
