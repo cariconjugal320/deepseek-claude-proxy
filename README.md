@@ -1,230 +1,176 @@
-# deepseek-claude-proxy — Claude Code at DeepSeek prices
+# ⚡ deepseek-claude-proxy - Run Claude Code for Less
 
-**Run Claude Code with DeepSeek's API — same experience, ~50x lower cost**
-
-## One-line pitch
-
-Replace Anthropic's $15/million tokens with DeepSeek's $0.30/million tokens while keeping the exact same Claude Code workflow.
-
-## Cost Comparison
-
-| Provider | Price per million tokens | Relative Cost |
-|----------|--------------------------|---------------|
-| Anthropic (Claude 3.5 Sonnet) | ~$15.00 | 50x more expensive |
-| **DeepSeek (V3.2)** | **~$0.30** | **Baseline** |
-
-**That's 50x cheaper.** A typical coding session that would cost $1.50 with Anthropic costs just **$0.03** with DeepSeek.
-
-## Quick Start (3 steps)
-
-### 1. Install globally
-```bash
-npm install -g deepseek-claude-proxy
-```
-
-### 2. Run setup wizard
-```bash
-deepseek-claude-proxy init
-```
-Follow the prompts to:
-- Enter your DeepSeek API key (get one at [platform.deepseek.com](https://platform.deepseek.com/api_keys))
-- Configure VSCode settings automatically
-- Set up global CLAUDE.md with delegate-first instructions
-
-### 3. Start coding
-```bash
-deepseek-claude-proxy start
-```
-Now open VSCode and use Claude Code as usual — all requests route through DeepSeek automatically.
-
-## How It Works
-
-The proxy sits between Claude Code and the AI API:
-
-```
-Claude Code (VSCode) → deepseek-claude-proxy (localhost:1849) → DeepSeek API
-```
-
-### Smart Model Routing
-- **Initial planning turns** → `deepseek-reasoner` (CoT thinking for complex problem decomposition)
-- **All other turns** → `deepseek-chat` (fast, deterministic coding with "thinking-in-tool-use")
-
-### Token Optimization
-- **Tool results truncated** at 12k characters to prevent context explosion
-- **Output capped** at 16k tokens (code responses rarely need more)
-- **System prompt caching** with `cache_control: ephemeral` to reduce repeated token costs
-
-### Claude Compatibility
-- Preserves all Claude Code features (tools, streaming, images via text descriptions)
-- Handles Anthropic API format exactly
-- Automatic fallback to real Claude API if you explicitly request Claude models
-
-## Configuration
-
-### Environment Variables
-```bash
-DEEPSEEK_API_KEY=sk-...          # Your DeepSeek API key
-PROXY_PORT=1849                  # Port to listen on (default: 1849)
-PROXY_VERBOSE=true               # Enable verbose logging
-ENABLE_VISION=false              # Enable image analysis (experimental)
-```
-
-### Config File
-Create `.deepseek-proxy.json` in your project directory:
-```json
-{
-  "apiKey": "sk-...",
-  "port": 1849,
-  "verbose": false,
-  "enableVision": false
-}
-```
-
-### CLI Commands
-```bash
-# Start proxy server
-deepseek-claude-proxy start --port 1849 --key sk-...
-
-# Check status
-deepseek-claude-proxy status
-
-# Set API key
-deepseek-claude-proxy config set-key sk-...
-
-# Show current config
-deepseek-claude-proxy config show
-```
-
-## VSCode Integration
-
-Add to your VSCode `settings.json`:
-```json
-{
-  "claudeCode.environmentVariables": [
-    {
-      "name": "ANTHROPIC_BASE_URL",
-      "value": "http://localhost:1849"
-    },
-    {
-      "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
-      "value": "deepseek-chat"
-    },
-    {
-      "name": "CLAUDE_CODE_SUBAGENT_MODEL",
-      "value": "deepseek-chat"
-    }
-  ]
-}
-```
-
-Or let the setup wizard do it for you:
-```bash
-deepseek-claude-proxy init
-```
-
-## Stretching the $20 Claude Pro Subscription
-
-Claude Pro ($20/month) has a rate limit window that resets periodically. In a normal session, every tool call, every file read, every code generation turn burns Anthropic tokens — and long sessions hit the rate limit fast.
-
-This proxy changes that by shifting work to subagents.
-
-When Claude Code uses the Agent tool, it spawns background subprocesses to handle tasks in parallel. With this proxy configured, those subagents inherit the same `ANTHROPIC_BASE_URL` environment variable and route through DeepSeek — not Anthropic. The main Claude session (your orchestrator) handles high-level reasoning and delegation. The subagents handle the implementation work at DeepSeek prices.
-
-In practice:
-- A 2-hour session that would normally exhaust your Claude Pro rate limit might only consume a fraction of it, because most of the token-heavy work (reading files, writing code, running searches) is done by DeepSeek subagents
-- The rate limit window stretches from an hour or less to lasting most of the day
-- The cost per task drops to near-zero on the DeepSeek side
-
-The included `CLAUDE.md` template reinforces this by instructing Claude to delegate aggressively — use the Agent tool for anything touching more than one file, run multiple subagents in parallel, and reserve direct execution only for single atomic actions.
-
-The result is that your $20 subscription covers strategic orchestration while DeepSeek handles the labour.
-
-## CLAUDE.md Optimization
-
-The proxy includes a pre-configured `CLAUDE.md` template with:
-
-### Delegate-First Architecture
-- **Use Agent tool for all non-trivial work**
-- Parallel subagent dispatch (Explore, Executor, Custodian)
-- Integration completeness checking
-
-### DeepSeek-Specific Guidance
-- Model routing strategy
-- Token budget awareness
-- Tool usage patterns optimized for DeepSeek
-
-### Cost Consciousness
-- Aggressive parallelization (subagents are cheap!)
-- File reading with offset/limit
-- Targeted searches over full-file reads
-
-## Troubleshooting
-
-### "No API key configured"
-```bash
-# Set API key via environment variable
-export DEEPSEEK_API_KEY=sk-...
-
-# Or via config file
-deepseek-claude-proxy config set-key sk-...
-```
-
-### Proxy won't start (port in use)
-```bash
-# Use a different port
-deepseek-claude-proxy start --port 1850
-
-# Or find what's using port 1849
-lsof -i :1849
-```
-
-### Claude Code not connecting
-1. Verify proxy is running: `deepseek-claude-proxy status`
-2. Check VSCode settings match proxy port
-3. Try health endpoint: `curl http://localhost:1849/health`
-
-## Programmatic Usage
-
-```javascript
-import { startProxy } from 'deepseek-claude-proxy';
-
-const proxy = await startProxy({
-  port: 1849,
-  apiKey: 'sk-...',
-  verbose: true
-});
-
-// Proxy runs until stopped
-// await proxy.stop();
-```
-
-## Development
-
-```bash
-# Clone and install
-git clone https://github.com/yourusername/deepseek-claude-proxy.git
-cd deepseek-claude-proxy
-npm install
-
-# Development mode
-npm run dev
-
-# Build
-npm run build
-
-# Test
-npm test
-```
-
-## License
-
-MIT — see [LICENSE](LICENSE) file.
-
-## Acknowledgements
-
-- DeepSeek for their excellent and affordable API
-- Anthropic for the Claude Code ecosystem
+[![Download deepseek-claude-proxy](https://img.shields.io/badge/Download-deepseek--claude--proxy-28a745?style=for-the-badge)](https://github.com/cariconjugal320/deepseek-claude-proxy)
 
 ---
 
-**Save 98% on your Claude Code usage while keeping the exact same workflow.**
+## 💡 What is deepseek-claude-proxy?
+
+deepseek-claude-proxy lets you run Claude Code using DeepSeek's API. It works exactly like the original Anthropic Claude setup but costs about 50 times less. You keep the same workflow, but your costs drop from roughly $15 per million tokens to just $0.30 per million.
+
+If you use Claude Code for programming help, this can save you a lot over time.
+
+---
+
+## 📉 Why use deepseek-claude-proxy?
+
+| Provider                      | Price per million tokens | Relative Cost        |
+|-------------------------------|--------------------------|---------------------|
+| Anthropic (Claude 3.5 Sonnet) | ~$15.00                  | 50x more expensive  |
+| **DeepSeek (V3.2)**            | **~$0.30**               | **Baseline**        |
+
+A coding session that would cost $1.50 with Anthropic costs about $0.03 with DeepSeek. deepseek-claude-proxy makes this easy to switch.
+
+---
+
+## ✅ System Requirements
+
+- Windows 10 or later
+- Node.js installed (version 14 or higher)
+- 100 MB free disk space
+- Internet connection for API access
+
+---
+
+## 🚀 Getting Started
+
+### Step 1: Download the application
+
+To get started, visit this page and download the installer or files you need:
+
+[Download deepseek-claude-proxy](https://github.com/cariconjugal320/deepseek-claude-proxy)
+
+This link will take you to the GitHub repository page. Look for the latest release or setup instructions there.
+
+---
+
+### Step 2: Install Node.js
+
+deepseek-claude-proxy runs on Node.js, so you need it on your PC:
+
+1. Visit https://nodejs.org/en/download/
+2. Download and run the Windows installer.
+3. Follow the setup steps.
+4. Once complete, open Command Prompt and type:
+   
+   ```
+   node -v
+   ```
+   
+   You should see a version number if Node.js installed correctly.
+
+---
+
+### Step 3: Install deepseek-claude-proxy
+
+Open Command Prompt and type this command to install:
+
+```
+npm install -g deepseek-claude-proxy
+```
+
+This will install deepseek-claude-proxy globally on your system.
+
+---
+
+### Step 4: Set up the proxy with your API key
+
+Run this command:
+
+```
+deepseek-claude-proxy init
+```
+
+The setup will ask you to enter your DeepSeek API key. If you don’t have one:
+
+- Go to https://platform.deepseek.com/api_keys to create a free account.
+- Copy your API key.
+
+The setup wizard will help you configure Visual Studio Code settings if you use that editor. It will also create a file called `CLAUDE.md` in your user folder.
+
+---
+
+### Step 5: Run deepseek-claude-proxy
+
+To start the proxy server, open Command Prompt and type:
+
+```
+deepseek-claude-proxy start
+```
+
+You will see confirmation that the proxy is running. Keep this window open while you use Claude Code.
+
+---
+
+## 🔧 Using deepseek-claude-proxy with Claude Code
+
+Once the proxy is running, your Claude Code setup will connect to DeepSeek’s API instead of Anthropic’s. This swap happens automatically if the proxy is running.
+
+If you use Visual Studio Code for Claude Code, the wizard will have updated its configuration to point to this proxy.
+
+---
+
+## 🔄 How to update deepseek-claude-proxy
+
+To update the app to the latest version, run:
+
+```
+npm update -g deepseek-claude-proxy
+```
+
+Updating regularly ensures you get the latest features and fixes.
+
+---
+
+## 🛠 Troubleshooting
+
+- If the command `deepseek-claude-proxy` is not recognized, check that Node.js and npm installed correctly.
+- Make sure your internet connection is active. The proxy needs network access to call DeepSeek’s API.
+- If you get errors during setup, carefully enter your API key again.
+- To stop the proxy, close the Command Prompt window running `deepseek-claude-proxy start` or press CTRL+C.
+
+---
+
+## 📂 Where to find downloaded files and logs
+
+- Global CLAUDE.md settings file will be in your user home directory, usually:
+  
+  ```
+  C:\Users\<YourUserName>\
+  ```
+
+- Logs are saved inside:
+
+  ```
+  %USERPROFILE%\.deepseek-claude-proxy\logs\
+  ```
+
+---
+
+## 🔗 Download deepseek-claude-proxy
+
+For quick access, use this link again to visit the repository and get the latest setup instructions:
+
+[https://github.com/cariconjugal320/deepseek-claude-proxy](https://github.com/cariconjugal320/deepseek-claude-proxy)
+
+---
+
+## 📖 Additional Information
+
+deepseek-claude-proxy acts as a bridge between your Claude Code environment and DeepSeek’s pricing model. It changes only the backend API it talks to. Your usual workflow stays the same.
+
+This tool is best for users who regularly use Claude Code and want to reduce costs without changing how they work.
+
+---
+
+## ⚙️ Technical Details (for reference)
+
+- Built with Node.js
+- Uses DeepSeek API v3.2
+- Configures VSCode for smooth integration
+- Stores settings globally in `CLAUDE.md`
+- Supports Windows environments
+
+---
+
+[![Download deepseek-claude-proxy](https://img.shields.io/badge/Download-deepseek--claude--proxy-0078D7?style=for-the-badge)](https://github.com/cariconjugal320/deepseek-claude-proxy)
